@@ -1,6 +1,11 @@
 import tkinter as tk
 from dataclasses import dataclass
-import detectors
+from gpiozero import MotionSensor
+
+PIR_PIN = 17
+
+MOTION_SENSOR_INTERVAL = 10000
+MOTION_SENSOR_CHECK_RATE = 100
 
 
 @dataclass
@@ -46,7 +51,6 @@ class LayoutControl:
         root,
         base_layout: Layout,
         sensed_layout: Layout,
-        detector: detectors.Detector,
     ):
         self.base_layout = base_layout
         self.sensed_layout = sensed_layout
@@ -57,35 +61,27 @@ class LayoutControl:
         self.base_layout.setup()
         self.sensed_layout.setup()
 
-        self.detector = detector
-
-        self.MOTION_SENSOR_INTERVAL = 10000
-        self.MOTION_SENSOR_CHECK_RATE = 100
         self.SENSED_PAGE_TIME = 5000
 
     def set_sensed(self):
         self.base_layout.hide()
         self.sensed_layout.show()
 
-        self.root.after(self.MOTION_SENSOR_INTERVAL, lambda: self.set_base())
+        self.root.after(self.SENSED_PAGE_TIME, lambda: self.set_base())
 
     def set_base(self):
         self.sensed_layout.hide()
         self.base_layout.show()
 
-    def check(self):
-        delay: int = self.MOTION_SENSOR_CHECK_RATE
-        if self.detector.check_for_change():
-            self.set_sensed()
-            delay = self.SENSED_PAGE_TIME
-        else:
-            self.set_base()
 
-        self.root.after(delay, self.check)
+def run(layout: LayoutControl):
+    pir = MotionSensor(PIR_PIN)
 
-    def start(self):
-        self.check()
-        self.root.mainloop()
+    while True:
+        layout.set_base()
+        pir.wait_for_motion()
+        layout.set_sensed()
+        pir.wait_for_no_motion()
 
 
 def main():
@@ -100,9 +96,8 @@ def main():
         root=root, background_color="red", message="Thank you for coming!"
     )
 
-    detector = detectors.KeyDetector(root)
-    controller = LayoutControl(root, not_triggered, triggered, detector)
-    controller.start()
+    controller = LayoutControl(root, not_triggered, triggered)
+    run(controller)
 
 
 if __name__ == "__main__":
